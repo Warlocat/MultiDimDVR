@@ -361,7 +361,7 @@ void DVR::H_times_V(const VectorXd& V, VectorXd& result)const
                     for(int rr = 0; rr < NStates; rr++)
                     {
                         if(ss >= rr) result(ii + ss*length) += potentialV(ss * (ss+1) / 2 + rr, ii) * V(ii + rr*length);
-                        else result(ii + ss*length) += conj(potentialV(rr * (rr+1) / 2 + ss, ii)) * V(ii + rr*length);
+                        else result(ii + ss*length) += potentialV(rr * (rr+1) / 2 + ss, ii) * V(ii + rr*length);
                     }
 
                     for(int dd = 0; dd < NDim; dd++)

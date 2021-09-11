@@ -2,7 +2,6 @@
 #include<iostream>
 #include<fstream>
 #include<Eigen/Dense>
-#include"mkl_interface.h"
 #include<omp.h>
 using namespace Eigen;
 using namespace std;

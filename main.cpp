@@ -3,80 +3,67 @@
 #include<Eigen/Dense>
 #include<iostream>
 #include<float.h>
+#include"DVR_C.h"
 #include"DVR.h"
-#include"fitting.h"
 #include<string>
+#include<complex>
 #include<cmath>
 #include<iomanip>
 #include<fstream>
 using namespace std;
 using namespace Eigen;
 
-double m1 = 88.9058, m2 = 15.9990;
 const double ATOMIC_MASS_UNIT = 1.660539040/9.1093826*10000, au2cm_1 = 219474.63, ang2bohr = 1.8897161646320724;
+const dcomplex III(0.0,1.0);
+MatrixXd refCoord(3,3);
+Matrix<Matrix3d, 4, 1> Qall;
+Matrix<Matrix3d, -1, 1> Q;
 
-double factorial(const int& n), eminTMP = 100, bondLength;
+double factorial(const int& n);
 Matrix<MatrixXi, -1, 1> PESparametersIJ;
 Matrix<VectorXd, -1, 1> PESparameters;
+void read_QUADRATURE(const string& filename, Matrix<Matrix3d, 4, 1>& Qall, MatrixXd& refCoord, VectorXd& omega, const int& ND);
 void readPESparameters(const int& ND, const string& filename, const int& index = 0);
 void readInput(int& NDim, VectorXi& NGrids, VectorXd& CoordStart, VectorXd& CoordEnd, int& lanczos_iter);
-void writeOutput(const MatrixXd& energies, const MatrixXd& states, const int& Nout = 50);
-double scanBondLength(MatrixXd (* PotentialPointer_)(const VectorXd& Coord, const int& ND));
+void writeOutput(const VectorXcd& energies, const MatrixXcd& states, const int& Nout = 20);
 
-MatrixXd potentialFunction0(const VectorXd& Coord, const int& ND);
-MatrixXd potentialFunction1(const VectorXd& Coord, const int& ND);
-MatrixXd potentialFunctionMatrix(const VectorXd& Coord, const int& ND);
-
-MatrixXd evaluateFCF(const MatrixXd& states1, const MatrixXd& states2, const int& num1, const int& num2);
-MatrixXd evaluateMatrixElement(const MatrixXd& states1, const MatrixXd& states2, const int& num1, const int& num2, MatrixXd (* PotentialPointer_)(const VectorXd& Coord, const int& ND), const DVR& dvrInstant);
-Vector2d evaluateOmega_eChi_e(const VectorXd& values, const int& num);
-
+VectorXd normal2internal_A(const VectorXd& Coord, const int& ND);
+VectorXd normal2internal_B(const VectorXd& Coord, const int& ND);
+MatrixXcd potentialFunction(const VectorXd& Coord, const int& ND);
+double potentialFunction_signle_wn(const VectorXd& Coord, const int& ND, const int& index);
 
 int main()
 {
-    int NDim, fullDim = 1, nstates = 2, lanczos_iter;
-    bool saveMem = false, readPES = false, useLanczos = false;
+    int NDim, nstates = 3, fullDim = 4, lanczos_iter;
+    bool saveMem = true, readPES = false, useLanczos = true;
     VectorXi NGrids;
     VectorXd CoordStart, CoordEnd, mass, omega, fullomega(fullDim);
-    Matrix<VectorXd, -1, 1> energies;
-    Matrix<MatrixXd, -1, 1> states;
+    VectorXcd energies;
+    MatrixXcd states;
     
     readInput(NDim, NGrids, CoordStart, CoordEnd, lanczos_iter);
-    
+    read_QUADRATURE("QUADRATURE_pi1", Qall, refCoord, fullomega, fullDim);
     PESparameters.resize(nstates);
     PESparametersIJ.resize(nstates);
-    energies.resize(nstates);
-    states.resize(nstates);
-    readPESparameters(NDim, "fitV0", 0);
-    readPESparameters(NDim, "fitV1", 1);
+    readPESparameters(NDim, "pi1_fit_6", 0);  
+    readPESparameters(NDim, "pi2_fit_6", 1);  
+    readPESparameters(NDim, "sigmaB_6", 2);  
+    MatrixXcd (* PotentialPointer)(const VectorXd& Coord, const int& ND) = potentialFunction;
+    
+    Q.resize(NDim);
     mass.resize(NDim);
-    for(int ii = 0; ii < NDim; ii++)  mass(ii) = m1*m2 * ATOMIC_MASS_UNIT / (m1+m2);
+    omega.resize(NDim);
+    fullomega = fullomega / au2cm_1;
+    Q << Qall(0), Qall(1), Qall(2), Qall(3);
+    omega << fullomega(0), fullomega(1), fullomega(2), fullomega(3);
+    //Q << Qall(0)i, Qall(1);
+   // omega << fullomega(0), fullomega(1);
+    for(int ii = 0; ii < NDim; ii++)  mass(ii) = 1.0 / omega(ii);
 
-    DVR dvr_state0(NDim, NGrids, CoordStart, CoordEnd, mass, potentialFunction0, 1, saveMem, readPES);
-    DVR dvr_state1(NDim, NGrids, CoordStart, CoordEnd, mass, potentialFunction1, 1, saveMem, readPES);
-    
-    dvr_state0.kernel(energies(0), states(0));
-    dvr_state1.kernel(energies(1), states(1));
+    DVR_C dvr_state1(NDim, NGrids, CoordStart, CoordEnd, mass, potentialFunction, nstates, saveMem, readPES);
+    dvr_state1.kernel(energies, states, lanczos_iter, useLanczos);
 
-    writeOutput(energies(0), states(0), 8);
-    writeOutput(energies(1), states(1), 8);
-
-    // MatrixXd fcf = evaluateFCF(states(0), states(1), 10, 1);
-    MatrixXd fcf = evaluateMatrixElement(states(0), states(1), 10, 1, potentialFunctionMatrix, dvr_state0);
-
-    for(int ii = 0; ii < fcf.cols(); ii++)
-    {
-        for(int jj = 0; jj < fcf.rows(); jj++)
-            cout << fixed << setprecision(5) << fcf(jj,ii) << endl;
-        cout << endl;
-    }
-    
-
-    scanBondLength(potentialFunction0);
-    cout << "Freq and anh 0: " << endl << evaluateOmega_eChi_e(energies(0),8) << endl;
-    scanBondLength(potentialFunction1);
-    cout << "Freq and anh 1: " << endl << evaluateOmega_eChi_e(energies(1),8) << endl;
-
+    writeOutput(energies, states);
     cout << "Program finished normally." << endl;
 
     return 0;
@@ -84,78 +71,148 @@ int main()
 
 
 
-MatrixXd potentialFunction0(const VectorXd& Coord, const int& ND)
+MatrixXcd potentialFunction(const VectorXd& Coord, const int& ND)
 {
-    MatrixXd V(1,1);
-    /* harmonic */
-    // double req = 1.7909, omega = 853.5;
-    // double tmp_d = Coord(0) - req * ang2bohr;
-    // V(0,0) = 0.5 *  m1*m2 * ATOMIC_MASS_UNIT / (m1+m2) * tmp_d*tmp_d * omega*omega / au2cm_1 / au2cm_1;
-
-    /* Morse */
-    double req = 1.7909, omega = 903.5 / au2cm_1, omega_chi = 2.7 / au2cm_1;
-    double D = omega*omega/omega_chi/4.0, a = sqrt(m1*m2 * ATOMIC_MASS_UNIT / (m1+m2) * omega*omega / 2.0 / D);
-    double tmp_d = Coord(0) - req * ang2bohr;
-    V(0,0) = D * pow(1.0 - exp(-a * tmp_d),2);
+    double xx = Coord(0), yy = Coord(1);
+    double Epp = potentialFunction_signle_wn(Coord, ND, 0);
+    double Emm = potentialFunction_signle_wn(Coord, ND, 1);
+    double Ebb = potentialFunction_signle_wn(Coord, ND, 2);
+    double lambdaX = 80.0, lambdaY = 80.0, coupling, correction;
+    coupling = lambdaX * xx + lambdaY * yy;
+    correction = sqrt((Ebb-Epp)*(Ebb-Epp) - 4*coupling*coupling);
     
-    /* ab initio */
-    // double coord = Coord(0)  - (0.0 - 0.0) * ang2bohr;
-    // double V = 0.0;
-    // double req = 1.8;
-    // double tmp_d = coord - req * ang2bohr;
-    // for(int ii = 0; ii < PESparameters(0).rows(); ii++) 
-    // {
-    //     double tmp = 1.0;
-    //     for(int jj = 0; jj < ND; jj++)
-    //     {
-    //         tmp = tmp * pow(tmp_d, PESparametersIJ(0)(ii, jj));
-    //     }
-    //     V = V + tmp * PESparameters(0)(ii);
-    // }
-    // V(0,0) = V / au2cm_1;
-
-    return V;
+    Matrix3d V1;
+    Matrix3cd V2;
+    V1 <<   0.5*(Epp+Ebb-correction), 0.0, coupling, 
+            0.0, Emm, 0.0, 
+            coupling, 0.0, 0.5*(Epp+Ebb+correction);
+    double c1 = xx/sqrt(xx*xx+yy*yy);
+    double c2 = yy/sqrt(xx*xx+yy*yy);
+    if(abs(xx) <1e-5 && abs(yy) < 1e-5)
+    {
+        c1 = 1.0; c2 = 0.0;
+    }
+    V2(0,0) = c1*c1*V1(0,0) + c2*c2*V1(1,1);
+    V2(1,1) = c2*c2*V1(0,0) + c1*c1*V1(1,1);
+    V2(2,2) = V1(2,2);
+    V2(1,0) = c1*c2*(V1(0,0) - V1(1,1)) + 130.3*III;
+    V2(2,0) = c1 * coupling;
+    V2(2,1) = -c2 * coupling;
+    V2(0,1) = conj(V2(1,0));
+    V2(0,2) = conj(V2(2,0));
+    V2(1,2) = conj(V2(2,1));
+    return V2;
 }
-MatrixXd potentialFunction1(const VectorXd& Coord, const int& ND)
+
+
+double potentialFunction_signle_wn(const VectorXd& Coord, const int& ND, const int& index)
 {
-    MatrixXd V(1,1);
-    /* harmonic */
-    // double req = 1.8198, omega = 785.7;
-    // double tmp_d = Coord(0) - req * ang2bohr;
-    // V(0,0) = 0.5 *  m1*m2 * ATOMIC_MASS_UNIT / (m1+m2) * tmp_d*tmp_d * omega*omega / au2cm_1 / au2cm_1;
+    double V = 0.0;
+    VectorXd internal;
+    if(index == 2) internal = normal2internal_B(Coord, ND);
+    else internal = normal2internal_A(Coord, ND);
 
-    /* Morse */
-    double req = 1.8252, omega = 774.6 / au2cm_1, omega_chi = 2.9 / au2cm_1;
-    double D = omega*omega/omega_chi/4.0, a = sqrt(m1*m2 * ATOMIC_MASS_UNIT / (m1+m2) * omega*omega / 2.0 / D);
-    double tmp_d = Coord(0) - req * ang2bohr;
-    V(0,0) = D * pow(1.0 - exp(-a * tmp_d),2);
-
-    /* ab initio */
-    // double coord = Coord(0)  - (0.0 - 0.0) * ang2bohr;
-    // double V = 0.0;
-    // double req = 1.8;
-    // double tmp_d = coord- req * ang2bohr;
-    // for(int ii = 0; ii < PESparameters(1).rows(); ii++) 
-    // {
-    //     double tmp = 1.0;
-    //     for(int jj = 0; jj < ND; jj++)
-    //     {
-    //         tmp = tmp * pow(tmp_d, PESparametersIJ(1)(ii, jj));
-    //     }
-    //     V = V + tmp * PESparameters(1)(ii);
-    // }
-    // V(0,0) = V / au2cm_1;
+    for(int ii = 0; ii < PESparameters(index).rows(); ii++) 
+    {
+        double tmp = 1.0;
+        for(int jj = 0; jj < 3; jj++)
+        {
+            tmp = tmp * pow(internal(jj), PESparametersIJ(index)(ii, jj));
+        }
+        V = V + tmp * PESparameters(index)(ii);
+    }
 
     return V;
 }
-MatrixXd potentialFunctionMatrix(const VectorXd& Coord, const int& ND)
+
+
+
+
+void read_QUADRATURE(const string& filename, Matrix<Matrix3d, 4, 1>& Qall, MatrixXd& refCoord, VectorXd& omega, const int& ND)
 {
-    MatrixXd V(1,1);
-    V(0,0) = 1.0;
-
-    return V;
+    ifstream ifs;
+    string flags;
+    ifs.open(filename);
+        for(int ii = 0; ii < ND; ii++)
+        {
+            ifs >> flags >> flags >> flags >> flags >> omega(ii);
+            ifs >> flags >> flags >> flags >> flags >> flags >> flags >> flags;
+            for(int jj = 0; jj < 3; jj++)
+            for(int kk = 0; kk < 3; kk++)
+            {
+                ifs >> Qall(ii)(jj, kk);
+            }  
+        }
+        ifs >> flags >> flags >> flags >> flags >> flags;
+        for(int jj = 0; jj < 3; jj++)
+        for(int kk = 0; kk < 3; kk++)
+        {
+            ifs >> refCoord(jj, kk);
+        }
+	
+    ifs.close();
 }
 
+
+VectorXd normal2internal_A(const VectorXd& Coord, const int& ND)
+{
+    double tmp;
+    Vector3d tmp1, tmp2, internal, r1e, r2e;
+    Matrix3d cart = refCoord;
+    for(int ii = 0; ii < ND; ii++)
+    {
+        cart += Coord(ii) * Q(ii);
+    }
+
+    for(int ii = 0; ii < 3; ii++)
+    {
+        tmp1(ii) = cart(0, ii) - cart(1, ii);
+        tmp2(ii) = cart(2, ii) - cart(1, ii);
+        r1e(ii) = refCoord(1, ii) - refCoord(0, ii);
+        r2e(ii) = refCoord(2, ii) - refCoord(1, ii);
+    }
+    // internal(0) = tmp1.norm() - r1e.norm();
+    // internal(1) = tmp2.norm() - r2e.norm();
+    internal(0) = tmp1.norm() - 3.93646667;
+    //internal(1) = tmp2.norm() - 1.84737507;
+    internal(1) = tmp2.norm() - 1.79737507;
+    tmp = tmp1.transpose() * tmp2;
+    tmp = tmp / tmp1.norm() / tmp2.norm();
+    if(tmp > 1.0) tmp = 1.0;
+    else if (tmp < -1.0) tmp = -1.0;
+
+    internal(2) = acos(tmp) / M_PI * 180.0 - 180.0;
+    // cout << internal.transpose() << endl;
+    return internal;
+}
+VectorXd normal2internal_B(const VectorXd& Coord, const int& ND)
+{
+    double tmp;
+    Vector3d tmp1, tmp2, internal, r1e, r2e;
+    Matrix3d cart = refCoord;
+    for(int ii = 0; ii < ND; ii++)
+    {
+        cart += Coord(ii) * Q(ii);
+    }
+
+    for(int ii = 0; ii < 3; ii++)
+    {
+        tmp1(ii) = cart(0, ii) - cart(1, ii);
+        tmp2(ii) = cart(2, ii) - cart(1, ii);
+        r1e(ii) = refCoord(1, ii) - refCoord(0, ii);
+        r2e(ii) = refCoord(2, ii) - refCoord(1, ii);
+    }
+    internal(0) = tmp1.norm() - 3.94722723;
+    internal(1) = tmp2.norm() - 1.79641517;
+    tmp = tmp1.transpose() * tmp2;
+    tmp = tmp / tmp1.norm() / tmp2.norm();
+    if(tmp > 1.0) tmp = 1.0;
+    else if (tmp < -1.0) tmp = -1.0;
+
+    internal(2) = acos(tmp) / M_PI * 180.0 - 180.0;
+    // cout << internal.transpose() << endl;
+    return internal;
+}
 
 double factorial(const int &n)
 {
@@ -175,11 +232,11 @@ void readPESparameters(const int& ND, const string& filename, const int& index)
     ifstream ifs;
     ifs.open(filename);
         ifs >> N;
-        PESparametersIJ(index).resize(N,ND);
+        PESparametersIJ(index).resize(N,3);
         PESparameters(index).resize(N);
         for(int ii = 0; ii < N; ii++) 
         {
-            for(int jj = 0; jj < ND; jj++) 
+            for(int jj = 0; jj < 3; jj++) 
             {
                 ifs >> PESparametersIJ(index)(ii, jj);
             }
@@ -212,110 +269,21 @@ void readInput(int& NDim, VectorXi& NGrids, VectorXd& CoordStart, VectorXd& Coor
     return;
 }
 
-void writeOutput(const MatrixXd& energies, const MatrixXd& states, const int& Nout)
+void writeOutput(const VectorXcd& energies, const MatrixXcd& states, const int& Nout)
 {
-    double tmp = 0.0;
-    for(int ii = 0; ii < Nout; ii++)    
-    {
-        tmp = 0.0;
-        // cout << fixed << setprecision(2) << (energies(ii) - energies(0))*au2cm_1 << endl;
-        cout << setprecision(16) << energies(ii) << endl;
-    }
-    return;
-}
-
-MatrixXd evaluateFCF(const MatrixXd& states1, const MatrixXd& states2, const int& num1, const int& num2)
-{
-    if(states1.rows() != states2.rows())
-    {
-        cout << "ERROR: states1 and state2 have different dimension\n";
-        exit(99);
-    }
-    MatrixXd FCF(num1,num2);
-    FCF = MatrixXd::Zero(num1,num2);
-    for(int ii = 0; ii < num1; ii++)
-    for(int jj = 0; jj < num2; jj++)
-    {
-        for(int kk = 0; kk < states1.rows(); kk++)
-            FCF(ii,jj) += states1(kk,ii) * states2(kk,jj);
-        FCF(ii,jj) = pow(FCF(ii,jj),2);
-    }
-
-    return FCF;
-}
-
-MatrixXd evaluateMatrixElement(const MatrixXd& states1, const MatrixXd& states2, const int& num1, const int& num2, MatrixXd (* PotentialPointer_)(const VectorXd& Coord, const int& ND), const DVR& dvrInstant)
-{
-    if(states1.rows() != states2.rows())
-    {
-        cout << "ERROR: states1 and state2 have different dimension\n";
-        exit(99);
-    }
-    MatrixXd FCF(num1,num2);
-    VectorXd coord(dvrInstant.CoordStart.rows());
-    FCF = MatrixXd::Zero(num1,num2);
-    for(int ii = 0; ii < num1; ii++)
-    for(int jj = 0; jj < num2; jj++)
-    {
-        for(int kk = 0; kk < states1.rows(); kk++)
+    ofstream ofs1, ofs2;
+    ofs1.open("ENERGY");
+    ofs2.open("STATES", ios::binary);
+        ofs1<< (real(energies(0)) + 3253.515147316093) * au2cm_1 << endl; 
+        for(int ii = 0; ii < Nout; ii++)    ofs1 << (real(energies(ii) - energies(0))) * au2cm_1 << endl;
+        for(int ii = 0; ii < Nout; ii++)    ofs1 << states(ii,0)<< endl;
+        for(int ii = 0; ii < states.rows(); ii ++)
         {
-            for(int dd = 0; dd < coord.rows(); dd++)
+            for(int jj = 0; jj < Nout; jj++)
             {
-                coord(dd) = dvrInstant.CoordStart(dd) + dvrInstant.dx(dd)*dvrInstant.oneD2mD(kk)(dd);
+                ofs2.write((char*) &states(ii, jj), sizeof(complex<double>));
             }
-            FCF(ii,jj) += states1(kk,ii) * states2(kk,jj) * PotentialPointer_(coord,dvrInstant.CoordStart.rows())(0,0);
         }
-        FCF(ii,jj) = pow(FCF(ii,jj),2);
-    }
-
-    return FCF;
-}
-
-
-double scanBondLength(MatrixXd (* PotentialPointer_)(const VectorXd& Coord, const int& ND))
-{
-    double x0 = 1.7, dx = 0.0001, Emin = 1e20, bl;
-    for(int ii = 0; ii < 2000; ii++)
-    {
-        double xtmp = x0 + ii * dx;
-        VectorXd coordtmp(1);
-        coordtmp(0) = xtmp * ang2bohr;
-        double etmp = PotentialPointer_(coordtmp,1)(0,0);
-        if(etmp < Emin)
-        {
-            bl = xtmp;
-            Emin = etmp;
-        }
-    }
-    cout << "Bond length: " << bl << ", and term energy: " << setprecision(16) << Emin << endl; 
-    return bl;
-}
-
-Vector2d evaluateOmega_eChi_e(const VectorXd& values, const int& num)
-{
-    Vector2d Omega_eChi_e;
-    VectorXd X(num-1), Y(num-1);
-    MatrixXd A(3,3), B(3,1), C;
-    for(int ii = 0; ii < num-1; ii++)
-    {
-        X(ii) = ii+1;
-        Y(ii) = (values(ii+1) - values(0)) * 219474.63;
-    }
-    for(int ii = 0; ii < 3; ii++)
-    {
-        B(ii) = 0;
-        for(int kk = 0; kk < num-1; kk++)
-            B(ii) += pow(X(kk),ii) * Y(kk);
-        for(int jj = 0; jj < 3; jj++)
-        {
-            A(ii,jj) = 0.0;
-            for(int kk = 0; kk < num-1; kk++)
-                A(ii,jj) += pow(X(kk),ii) * pow(X(kk),jj);
-        }
-    }
-    C = A.inverse() * B;
-    Omega_eChi_e(1) = -C(2);
-    Omega_eChi_e(0) = C(1) + Omega_eChi_e(1);
-
-    return Omega_eChi_e;
+    ofs2.close();
+    ofs1.close();
 }

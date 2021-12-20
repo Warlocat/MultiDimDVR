@@ -6,6 +6,8 @@ TEST = main.o DVR.o DVR_C.o
 DVR_md.exe: ${TEST}
 	${CPP} ${CPPFLAG} -I ${EIGEN} ${TEST} -o DVR_md.exe
 
+fcf.exe: fcf.cpp
+	${CPP} ${CPPFLAG} -I ${EIGEN} fcf.cpp -o fcf.exe
 
 %.o: %.cpp
 	$(CPP) $(CPPFLAG) -c $< -o $@ -I ${EIGEN}

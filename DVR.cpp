@@ -307,7 +307,7 @@ void DVR::kernel(VectorXd& energies, MatrixXd& states, const int& solverSize, co
     oneD2mD(lll) equivalently returns lll th row in indice.
     H_times_V(V) returns product of Hamiltonian and V.
 */
-inline VectorXi DVR::oneD2mD(const int& lll)const
+VectorXi DVR::oneD2mD(const int& lll)const
 {
     VectorXi indiceMD(NDim);
     int tmpll = lll;
@@ -323,7 +323,7 @@ inline VectorXi DVR::oneD2mD(const int& lll)const
     }
     return indiceMD;
 }
-inline int DVR::mD2oneD(const VectorXi& indicesMD)const
+int DVR::mD2oneD(const VectorXi& indicesMD)const
 {
     int tmp = 1, returnValue = 0;
 	for(int ii = NDim - 1; ii >= 0; ii--)

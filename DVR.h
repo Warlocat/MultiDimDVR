@@ -30,7 +30,7 @@ class DVR
 {
 private:
     int NDim, NStates, length;
-    VectorXd CoordStart, CoordEnd, mass, dx, eigenValues;
+    VectorXd eigenValues;
     MatrixXd kineticT, potentialV, eigenStates;
     MatrixXi indice;
     VectorXi NGrids;
@@ -42,9 +42,10 @@ private:
 
     /* Special evaluation functions used in memory saving purpose */
     void H_times_V(const VectorXd& V, VectorXd& result)const;
-    VectorXi oneD2mD(const int& lll)const;
-    int mD2oneD(const VectorXi& indicesMD)const;
+    
 public:
+    VectorXd CoordStart, CoordEnd, mass, dx;
+    
     /* Construction function */
     DVR(const int& NDim_, const VectorXi& NGrids_, const VectorXd& CoordStart_, const VectorXd& CoordEnd_, const VectorXd& mass_, MatrixXd (* PotentialPointer_)(const VectorXd& Coord, const int& ND), const int& NStates_ = 1, const bool& saveMem_ = false, const bool& readPESfromFile_ = false);
 	
@@ -61,6 +62,10 @@ public:
     MatrixXd getHamiltonian();
     MatrixXd getEigenStates();
     VectorXd getEigenValues();
+
+    /* Coordinate indices change */
+    VectorXi oneD2mD(const int& lll)const;
+    int mD2oneD(const VectorXi& indicesMD)const;
 };
 
 
